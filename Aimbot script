@@ -1,0 +1,366 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local UserInputService = game:GetService("UserInputService")
+
+local Camera = workspace.CurrentCamera
+local player = Players.LocalPlayer
+
+-- SETTINGS
+local FOV_RADIUS = 220
+local AIM_SPEED = 0.25
+local PREDICTION = 0.12
+local LOCK_DISTANCE = 20
+
+local aimEnabled = false
+local triggerHeld = false
+local triggerLocked = false
+local fpsEnabled = false
+
+local lockedTarget = nil
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+--------------------------------------------------
+-- MAIN UI
+--------------------------------------------------
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,220,0,160)
+frame.Position = UDim2.new(0,20,0,120)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Parent = gui
+Instance.new("UICorner",frame).CornerRadius = UDim.new(0,10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundColor3 = Color3.fromRGB(20,20,20)
+title.Text = "Aim Settings"
+title.TextColor3 = Color3.new(1,1,1)
+title.Parent = frame
+Instance.new("UICorner",title).CornerRadius = UDim.new(0,10)
+
+local aimButton = Instance.new("TextButton")
+aimButton.Size = UDim2.new(1,-20,0,30)
+aimButton.Position = UDim2.new(0,10,0,40)
+aimButton.Text = "Aimbot: OFF"
+aimButton.Parent = frame
+Instance.new("UICorner",aimButton).CornerRadius = UDim.new(0,6)
+
+local fpsButton = Instance.new("TextButton")
+fpsButton.Size = UDim2.new(1,-20,0,30)
+fpsButton.Position = UDim2.new(0,10,0,80)
+fpsButton.Text = "FPS/Ping: OFF"
+fpsButton.Parent = frame
+Instance.new("UICorner",fpsButton).CornerRadius = UDim.new(0,6)
+
+local lockTrigger = Instance.new("TextButton")
+lockTrigger.Size = UDim2.new(1,-20,0,30)
+lockTrigger.Position = UDim2.new(0,10,0,120)
+lockTrigger.Text = "Trigger Lock: OFF"
+lockTrigger.Parent = frame
+Instance.new("UICorner",lockTrigger).CornerRadius = UDim.new(0,6)
+
+--------------------------------------------------
+-- FPS PANEL
+--------------------------------------------------
+
+local fpsPanel = Instance.new("Frame")
+fpsPanel.Size = UDim2.new(0,140,0,60)
+fpsPanel.Position = UDim2.new(0,250,0,120)
+fpsPanel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+fpsPanel.Visible = false
+fpsPanel.Parent = gui
+Instance.new("UICorner",fpsPanel).CornerRadius = UDim.new(0,8)
+
+local fpsLabel = Instance.new("TextLabel")
+fpsLabel.Size = UDim2.new(1,0,0.5,0)
+fpsLabel.BackgroundTransparency = 1
+fpsLabel.TextColor3 = Color3.new(1,1,1)
+fpsLabel.Text = "FPS:"
+fpsLabel.Parent = fpsPanel
+
+local pingLabel = Instance.new("TextLabel")
+pingLabel.Size = UDim2.new(1,0,0.5,0)
+pingLabel.Position = UDim2.new(0,0,0.5,0)
+pingLabel.BackgroundTransparency = 1
+pingLabel.TextColor3 = Color3.new(1,1,1)
+pingLabel.Text = "Ping:"
+pingLabel.Parent = fpsPanel
+
+--------------------------------------------------
+-- TRIGGER BUTTON
+--------------------------------------------------
+
+local triggerButton = Instance.new("TextButton")
+triggerButton.Size = UDim2.new(0,120,0,50)
+triggerButton.Position = UDim2.new(0.7,0,0.8,0)
+triggerButton.Text = "AIM"
+triggerButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
+triggerButton.TextColor3 = Color3.new(1,1,1)
+triggerButton.Parent = gui
+Instance.new("UICorner",triggerButton).CornerRadius = UDim.new(0,10)
+
+--------------------------------------------------
+-- FOV CIRCLE
+--------------------------------------------------
+
+local circle = Instance.new("Frame")
+circle.Size = UDim2.new(0,FOV_RADIUS*2,0,FOV_RADIUS*2)
+circle.Position = UDim2.new(0.5,-FOV_RADIUS,0.5,-FOV_RADIUS)
+circle.BackgroundTransparency = 1
+circle.Visible = false
+circle.Parent = gui
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(255,255,255)
+stroke.Parent = circle
+
+Instance.new("UICorner",circle).CornerRadius = UDim.new(1,0)
+
+--------------------------------------------------
+-- CROSSHAIR
+--------------------------------------------------
+
+local cross = Instance.new("Frame")
+cross.Size = UDim2.new(0,10,0,10)
+cross.Position = UDim2.new(0.5,-5,0.5,-5)
+cross.BackgroundColor3 = Color3.fromRGB(255,80,80)
+cross.BorderSizePixel = 0
+cross.Parent = gui
+Instance.new("UICorner",cross).CornerRadius = UDim.new(1,0)
+
+--------------------------------------------------
+-- BUTTON LOGIC
+--------------------------------------------------
+
+aimButton.MouseButton1Click:Connect(function()
+
+	aimEnabled = not aimEnabled
+
+	if aimEnabled then
+		aimButton.Text = "Aimbot: ON"
+		circle.Visible = true
+	else
+		aimButton.Text = "Aimbot: OFF"
+		circle.Visible = false
+		lockedTarget = nil
+	end
+
+end)
+
+fpsButton.MouseButton1Click:Connect(function()
+
+	fpsEnabled = not fpsEnabled
+
+	if fpsEnabled then
+		fpsButton.Text = "FPS/Ping: ON"
+		fpsPanel.Visible = true
+	else
+		fpsButton.Text = "FPS/Ping: OFF"
+		fpsPanel.Visible = false
+	end
+
+end)
+
+lockTrigger.MouseButton1Click:Connect(function()
+
+	triggerLocked = not triggerLocked
+
+	if triggerLocked then
+		lockTrigger.Text = "Trigger Lock: ON"
+	else
+		lockTrigger.Text = "Trigger Lock: OFF"
+	end
+
+end)
+
+--------------------------------------------------
+-- TRIGGER HOLD
+--------------------------------------------------
+
+triggerButton.MouseButton1Down:Connect(function()
+	triggerHeld = true
+end)
+
+triggerButton.MouseButton1Up:Connect(function()
+	triggerHeld = false
+	lockedTarget = nil
+end)
+
+--------------------------------------------------
+-- MOBILE DRAG
+--------------------------------------------------
+
+local dragging = false
+local dragStart
+local startPos
+
+triggerButton.InputBegan:Connect(function(input)
+
+	if triggerLocked then return end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+
+		dragging = true
+		dragStart = input.Position
+		startPos = triggerButton.Position
+
+	end
+
+end)
+
+triggerButton.InputEnded:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+
+		dragging = false
+
+	end
+
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if dragging then
+
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+			local delta = input.Position - dragStart
+
+			triggerButton.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+
+		end
+
+	end
+
+end)
+
+--------------------------------------------------
+-- TARGET FIND
+--------------------------------------------------
+
+local function getTarget()
+
+	local closest
+	local shortest = math.huge
+
+	local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+
+	for _,plr in pairs(Players:GetPlayers()) do
+
+		if plr ~= player and plr.Character then
+
+			local head = plr.Character:FindFirstChild("Head")
+
+			if head then
+
+				local pos,visible = Camera:WorldToViewportPoint(head.Position)
+
+				if visible then
+
+					local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
+
+					if dist < FOV_RADIUS and dist < shortest then
+						shortest = dist
+						closest = plr
+					end
+
+				end
+
+			end
+
+		end
+
+	end
+
+	return closest
+
+end
+
+--------------------------------------------------
+-- FPS COUNTER
+--------------------------------------------------
+
+local last = tick()
+local frames = 0
+
+RunService.RenderStepped:Connect(function()
+
+	frames += 1
+
+	if tick()-last >= 1 then
+
+		local fps = frames
+		frames = 0
+		last = tick()
+
+		fpsLabel.Text = "FPS: "..fps
+
+		local ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+		pingLabel.Text = "Ping: "..ping
+
+	end
+
+end)
+
+--------------------------------------------------
+-- AIM SYSTEM
+--------------------------------------------------
+
+RunService.RenderStepped:Connect(function()
+
+	if not aimEnabled then return end
+	if not triggerHeld then return end
+
+	local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+
+	if not lockedTarget then
+		lockedTarget = getTarget()
+	end
+
+	if lockedTarget and lockedTarget.Character then
+
+		local head = lockedTarget.Character:FindFirstChild("Head")
+		local hrp = lockedTarget.Character:FindFirstChild("HumanoidRootPart")
+
+		if head and hrp then
+
+			local velocity = hrp.Velocity * PREDICTION
+			local predicted = head.Position + velocity
+
+			local screenPos,_ = Camera:WorldToViewportPoint(head.Position)
+			local dist = (Vector2.new(screenPos.X,screenPos.Y)-center).Magnitude
+
+			local camPos = Camera.CFrame.Position
+
+			local aimCF
+
+			if dist < LOCK_DISTANCE then
+				aimCF = CFrame.new(camPos,head.Position)
+			else
+				aimCF = CFrame.new(camPos,predicted)
+			end
+
+			Camera.CFrame = Camera.CFrame:Lerp(aimCF,AIM_SPEED)
+
+		end
+
+	end
+
+end)
